@@ -1,0 +1,182 @@
+import streamlit as st
+import os
+from research_agent import DeepResearchAgent
+
+# Page config
+st.set_page_config(
+    page_title="Deep Research Agent",
+    page_icon="🔍",
+    layout="wide"
+)
+
+# Title and description
+st.title("🔍 Deep Research Agent")
+st.markdown("Research companies and generate tailored interview questions based on your resume")
+
+# Sidebar for configuration
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    
+    # API Keys
+    st.subheader("API Keys")
+    tavily_key = st.text_input(
+        "Tavily API Key",
+        type="password",
+        value=os.getenv('TAVILY_API_KEY', ''),
+        help="Get your key from tavily.com"
+    )
+    
+    anthropic_key = st.text_input(
+        "Anthropic API Key",
+        type="password",
+        value=os.getenv('ANTHROPIC_API_KEY', ''),
+        help="Get your key from console.anthropic.com"
+    )
+    
+    st.divider()
+    
+    # Resume input
+    st.subheader("📄 Your Resume")
+    resume_text = st.text_area(
+        "Paste your resume here",
+        height=300,
+        help="Include your key experiences, skills, and projects",
+    )
+    
+    # Save resume option
+    if st.button("💾 Save Resume to File"):
+        with open("resume.txt", "w") as f:
+            f.write(resume_text)
+        st.success("Resume saved to resume.txt")
+
+# Main content area
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    st.subheader("🎯 Company Research")
+    company_name = st.text_input(
+        "Company Name",
+        placeholder="e.g., Junior, Corvus, Farsight"
+    )
+    
+    # Load saved resume if exists
+    if os.path.exists("resume.txt") and not resume_text:
+        with open("resume.txt", "r") as f:
+            resume_text = f.read()
+        st.info("Loaded resume from resume.txt")
+    
+    research_button = st.button("🚀 Start Research", type="primary", use_container_width=True)
+
+with col2:
+    st.subheader("📊 Research Status")
+    status_placeholder = st.empty()
+
+# Initialize session state
+if 'research_results' not in st.session_state:
+    st.session_state.research_results = None
+
+# Research execution
+if research_button:
+    # Validation
+    if not company_name:
+        st.error("Please enter a company name")
+    elif not tavily_key or not anthropic_key:
+        st.error("Please provide both API keys in the sidebar")
+    elif not resume_text:
+        st.error("Please paste your resume in the sidebar")
+    else:
+        # Initialize agent
+        try:
+            with status_placeholder.container():
+                st.info("🔄 Initializing research agent...")
+                
+                agent = DeepResearchAgent(
+                    resume_text=resume_text,
+                    tavily_api_key=tavily_key,
+                    anthropic_api_key=anthropic_key
+                )
+                
+                st.info(f"🔍 Researching {company_name}...")
+                st.caption("This may take 30-60 seconds...")
+                
+                # Conduct research
+                results = agent.research_company(company_name)
+                
+                # Store in session state
+                st.session_state.research_results = results
+                
+                st.success(f"✅ Research complete for {company_name}!")
+                
+        except Exception as e:
+            st.error(f"❌ Error during research: {str(e)}")
+            st.exception(e)
+
+# Display results
+if st.session_state.research_results:
+    results = st.session_state.research_results
+    
+    st.divider()
+    st.header(f"📋 Results: {results['company_name']}")
+    
+    # Create tabs for different sections
+    tab1, tab2, tab3 = st.tabs(["🏢 Company Profile", "💬 Interview Questions", "📥 Export"])
+    
+    with tab1:
+        st.markdown(results['profile'])
+        
+        # Copy button
+        if st.button("📋 Copy Profile to Clipboard"):
+            st.code(results['profile'], language=None)
+    
+    with tab2:
+        st.markdown(results['questions'])
+        
+        # Copy button
+        if st.button("📋 Copy Questions to Clipboard"):
+            st.code(results['questions'], language=None)
+    
+    with tab3:
+        st.subheader("Export Options")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Export as JSON
+            import json
+            json_str = json.dumps(results, indent=2)
+            st.download_button(
+                label="📥 Download JSON",
+                data=json_str,
+                file_name=f"{results['company_name'].lower().replace(' ', '_')}_research.json",
+                mime="application/json"
+            )
+        
+        with col2:
+            # Export as Markdown
+            markdown_content = f"""# {results['company_name']} - Research Report
+
+## Company Profile
+
+{results['profile']}
+
+---
+
+## Interview Questions
+
+{results['questions']}
+
+---
+*Generated by Deep Research Agent*
+"""
+            st.download_button(
+                label="📥 Download Markdown",
+                data=markdown_content,
+                file_name=f"{results['company_name'].lower().replace(' ', '_')}_research.md",
+                mime="text/markdown"
+            )
+        
+        st.info("💡 Tip: Save these results for your interview preparation!")
+
+# Footer
+st.divider()
+st.caption("Built with Streamlit, Tavily, and Claude")
