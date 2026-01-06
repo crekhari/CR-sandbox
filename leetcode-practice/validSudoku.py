@@ -30,4 +30,4 @@ def validSudoku(board):
             if len(ddict[square_coord]) == old_len_square and board[x][y] != ".":
                 return False
     return True
-print(validSodoku(board))
+print(validSudoku(board))
